@@ -1,6 +1,6 @@
-from datetime import datetime
 import os
-from flask import Flask, flash, redirect, render_template_string, request, url_for
+from datetime import datetime
+from flask import Flask, render_template_string, request, redirect, url_for, flash
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
@@ -8,48 +8,51 @@ app = Flask(__name__)
 app.secret_key = "cyber_falcon_watermelon_secret_key"
 OWNER_PIN = "1234"
 
-# Ungaloda direct Neon Pooled Database URL
+# Direct Neon Pooled Database URL
 DATABASE_URL = os.environ.get(
     "DATABASE_URL", 
     "postgresql://neondb_owner:npg_SZaBURp3Ft0z@ep-fancy-cell-bbqyof0l-pooler.c-15.us-east-1.aws.neon.tech/neondb?sslmode=require"
 )
 
-
 def get_db_connection():
     return psycopg2.connect(DATABASE_URL)
 
-
 def init_db():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS orders (
-            id SERIAL PRIMARY KEY,
-            name TEXT NOT NULL,
-            user_from TEXT NOT NULL,
-            tons REAL NOT NULL,
-            load_to TEXT NOT NULL,
-            phone TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-    """)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS pricing (
-            id INT PRIMARY KEY,
-            cut1 TEXT NOT NULL,
-            cut2 TEXT NOT NULL,
-            cut3 TEXT NOT NULL
-        );
-    """)
-    cursor.execute("SELECT COUNT(*) FROM pricing;")
-    if cursor.fetchone()[0] == 0:
-        cursor.execute(
-            "INSERT INTO pricing (id, cut1, cut2, cut3) VALUES (1, '15k to 20k', '8.5k to 15k', '6k to 8.5k');"
-        )
-    conn.commit()
-    cursor.close()
-    conn.close()
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS orders (
+                id SERIAL PRIMARY KEY,
+                name TEXT NOT NULL,
+                user_from TEXT NOT NULL,
+                tons REAL NOT NULL,
+                load_to TEXT NOT NULL,
+                phone TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS pricing (
+                id INT PRIMARY KEY,
+                cut1 TEXT NOT NULL,
+                cut2 TEXT NOT NULL,
+                cut3 TEXT NOT NULL
+            );
+        """)
+        cursor.execute("SELECT COUNT(*) FROM pricing;")
+        if cursor.fetchone()[0] == 0:
+            cursor.execute(
+                "INSERT INTO pricing (id, cut1, cut2, cut3) VALUES (1, '15k to 20k', '8.5k to 15k', '6k to 8.5k');"
+            )
+        conn.commit()
+        cursor.close()
+        conn.close()
+    except Exception as e:
+        print("Database Init Error:", e)
 
+# Server startup-la Gunicorn direct-aa DB init panna:
+init_db()
 
 def get_prices():
     try:
@@ -61,16 +64,15 @@ def get_prices():
         conn.close()
         if row:
             return {"cut1": row[0], "cut2": row[1], "cut3": row[2]}
-    except Exception:
-        pass
+    except Exception as e:
+        print("Fetch Prices Error:", e)
     return {
         "cut1": "15k to 20k",
         "cut2": "8.5k to 15k",
-        "cut3": "6k to 8.5k",
+        "cut3": "6k to 8.5k"
     }
 
-
-# ----------------- SINGLE FILE EMBEDDED FRONTEND -----------------
+# ----------------- EMBEDDED TEMPLATE -----------------
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="ta">
@@ -534,15 +536,11 @@ HTML_TEMPLATE = """
 </html>
 """
 
-
 # ----------------- ROUTING LOGIC -----------------
 @app.route("/")
 def home():
     rates = get_prices()
-    return render_template_string(
-        HTML_TEMPLATE, rates=rates, owner_logged_in=False
-    )
-
+    return render_template_string(HTML_TEMPLATE, rates=rates, owner_logged_in=False)
 
 @app.route("/book_order", methods=["POST"])
 def book_order():
@@ -554,22 +552,16 @@ def book_order():
 
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute(
-        """
+    cursor.execute("""
         INSERT INTO orders (name, user_from, tons, load_to, phone) 
         VALUES (%s, %s, %s, %s, %s);
-    """,
-        (name, user_from, tons, load_to, phone),
-    )
+    """, (name, user_from, tons, load_to, phone))
     conn.commit()
     cursor.close()
     conn.close()
 
-    flash(
-        "Watermelon load order booked successfully! Ellappan anna will review it."
-    )
+    flash("Watermelon load order booked successfully! Ellappan anna will review it.")
     return redirect(url_for("home"))
-
 
 @app.route("/owner_login", methods=["POST"])
 def owner_login():
@@ -591,10 +583,7 @@ def owner_login():
     cursor.close()
     conn.close()
 
-    return render_template_string(
-        HTML_TEMPLATE, rates=rates, owner_logged_in=True, orders=orders
-    )
-
+    return render_template_string(HTML_TEMPLATE, rates=rates, owner_logged_in=True, orders=orders)
 
 @app.route("/update_prices", methods=["POST"])
 def update_prices():
@@ -604,14 +593,11 @@ def update_prices():
 
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute(
-        """
+    cursor.execute("""
         UPDATE pricing 
         SET cut1 = %s, cut2 = %s, cut3 = %s 
         WHERE id = 1;
-    """,
-        (cut1, cut2, cut3),
-    )
+    """, (cut1, cut2, cut3))
     conn.commit()
     cursor.close()
     conn.close()
@@ -619,7 +605,5 @@ def update_prices():
     flash("Cutting prices updated successfully!")
     return redirect(url_for("home"))
 
-
 if __name__ == "__main__":
-    init_db()
     app.run(host="0.0.0.0", port=5000, debug=True)
